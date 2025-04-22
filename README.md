@@ -95,6 +95,17 @@ python clickup_csv_importer.py --csv-file your_tasks.csv --list-id YOUR_LIST_ID 
 
 例： `https://app.clickup.com/123456/v/li/789012345`の場合、リストIDは`789012345`
 
+## セキュリティ上の注意
+
+- **APIトークンは機密情報です**。APIトークンをソースコードに直接記述したり、バージョン管理システムにコミットしたりしないでください。
+- コマンドラインで`--api-token`オプションを使用する場合、コマンド履歴に残る可能性があります。
+- 本番環境では環境変数を使用することをお勧めします：
+  ```bash
+  export CLICKUP_API_TOKEN="your_api_token"
+  python clickup_csv_importer.py --csv-file your_tasks.csv --list-id YOUR_LIST_ID --api-token $CLICKUP_API_TOKEN
+  ```
+- スクリプトを自動化プロセスで実行する場合は、適切な権限管理を行ってください。
+
 ## テスト
 
 テストを実行するには：
@@ -105,7 +116,7 @@ python -m unittest discover -s tests
 
 ## ライセンス
 
-MIT License
+[MIT License](./LICENSE)
 
 ## 貢献
 

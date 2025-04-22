@@ -31,11 +31,41 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# カスタム例外クラスの定義
+class ClickUpImporterError(Exception):
+    """ClickUp Importerの基本例外クラス"""
+    pass
+
+class APIError(ClickUpImporterError):
+    """API接続に関するエラー"""
+    pass
+
+class AuthenticationError(APIError):
+    """認証エラー"""
+    pass
+
+class ResourceNotFoundError(APIError):
+    """リソースが見つからないエラー"""
+    pass
+
+class CSVError(ClickUpImporterError):
+    """CSVファイルに関するエラー"""
+    pass
+
+class ConfigurationError(ClickUpImporterError):
+    """設定に関するエラー"""
+    pass
+
 class ClickUpCSVImporter:
     """Class for importing tasks from CSV to ClickUp"""
     
     def __init__(self, api_token, list_id, dry_run=False, output_file=None):
         """Initialize with API token and list ID"""
+        if not api_token:
+            raise ConfigurationError("API token is required")
+        if not list_id:
+            raise ConfigurationError("List ID is required")
+            
         self.api_token = api_token
         self.list_id = list_id
         self.base_url = "https://api.clickup.com/api/v2"
@@ -74,17 +104,21 @@ class ClickUpCSVImporter:
             logger.info(f"API token and list ID verified successfully. List name: {list_name}")
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
-                logger.error("Invalid API token. Please check your API token and try again.")
-                sys.exit(1)
+                msg = "Invalid API token. Please check your API token and try again."
+                logger.error(msg)
+                raise AuthenticationError(msg) from e
             elif e.response.status_code == 404:
-                logger.error(f"List ID {self.list_id} not found. Please check your list ID and try again.")
-                sys.exit(1)
+                msg = f"List ID {self.list_id} not found. Please check your list ID and try again."
+                logger.error(msg)
+                raise ResourceNotFoundError(msg) from e
             else:
-                logger.error(f"HTTP error occurred: {e}")
-                sys.exit(1)
+                msg = f"HTTP error occurred: {e}"
+                logger.error(msg)
+                raise APIError(msg) from e
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error connecting to ClickUp API: {e}")
-            sys.exit(1)
+            msg = f"Error connecting to ClickUp API: {e}"
+            logger.error(msg)
+            raise APIError(msg) from e
     
     def create_task(self, task_data):
         """Create a task in ClickUp"""
@@ -138,8 +172,9 @@ class ClickUpCSVImporter:
                 
                 # Check if required field 'name' is in the CSV
                 if 'name' not in reader.fieldnames:
-                    logger.error("CSV must contain a 'name' column for task names")
-                    sys.exit(1)
+                    msg = "CSV must contain a 'name' column for task names"
+                    logger.error(msg)
+                    raise CSVError(msg)
                 
                 # Count rows in the file
                 rows = list(reader)
@@ -243,11 +278,15 @@ class ClickUpCSVImporter:
                         })
         
         except FileNotFoundError:
-            logger.error(f"CSV file not found: {csv_file}")
-            sys.exit(1)
+            msg = f"CSV file not found: {csv_file}"
+            logger.error(msg)
+            raise CSVError(msg)
         except Exception as e:
-            logger.error(f"Error processing CSV file: {e}")
-            sys.exit(1)
+            if isinstance(e, ClickUpImporterError):
+                raise
+            msg = f"Error processing CSV file: {e}"
+            logger.error(msg)
+            raise CSVError(msg) from e
         
         # Write results to output file if specified
         if self.output_file:
@@ -289,50 +328,87 @@ class ClickUpCSVImporter:
                     
             logger.info(f"Results written to {self.output_file}")
         except Exception as e:
-            logger.error(f"Failed to write results to CSV: {e}")
+            msg = f"Failed to write results to CSV: {e}"
+            logger.error(msg)
+            # ここでは例外をスローせず、ログに記録するだけにする（結果の出力は重要だが、失敗しても処理を続行できる）
+
+def get_api_token_from_env():
+    """Get API token from environment variable"""
+    return os.environ.get("CLICKUP_API_TOKEN")
 
 def main():
     """Main function to run the script"""
     parser = argparse.ArgumentParser(description='Import tasks from CSV to ClickUp')
     parser.add_argument('--csv-file', required=True, help='Path to CSV file')
     parser.add_argument('--list-id', required=True, help='ClickUp list ID')
-    parser.add_argument('--api-token', required=True, help='ClickUp API token')
+    parser.add_argument('--api-token', help='ClickUp API token (または環境変数 CLICKUP_API_TOKEN で指定)')
     parser.add_argument('--dry-run', action='store_true', help='Run in test mode without creating tasks')
     parser.add_argument('--output', help='Output file path for results CSV')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
     
-    args = parser.parse_args()
-    
-    # Set logging level based on verbose flag
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    try:
+        args = parser.parse_args()
         
-    # Initialize importer
-    importer = ClickUpCSVImporter(
-        args.api_token, 
-        args.list_id, 
-        dry_run=args.dry_run,
-        output_file=args.output
-    )
-    
-    # Log startup info
-    if args.dry_run:
-        logger.info(f"Starting DRY RUN import from {args.csv_file} to list {args.list_id}")
-    else:
-        logger.info(f"Starting import from {args.csv_file} to list {args.list_id}")
-    
-    # Process CSV
-    success_count, error_count = importer.process_csv(args.csv_file)
-    
-    # Log completion info
-    if args.dry_run:
-        logger.info(f"DRY RUN completed. Would have created {success_count} tasks, {error_count} would have failed.")
-    else:
-        logger.info(f"Import completed. Successfully created {success_count} tasks, {error_count} failed.")
-    
-    # Output file info
-    if args.output:
-        logger.info(f"Results written to {args.output}")
+        # API token from command line or environment variable
+        api_token = args.api_token or get_api_token_from_env()
+        if not api_token:
+            raise ConfigurationError("API token is required. Provide it via --api-token argument or CLICKUP_API_TOKEN environment variable.")
+        
+        # Set logging level based on verbose flag
+        if args.verbose:
+            logging.getLogger().setLevel(logging.DEBUG)
+            
+        # Initialize importer
+        importer = ClickUpCSVImporter(
+            api_token, 
+            args.list_id, 
+            dry_run=args.dry_run,
+            output_file=args.output
+        )
+        
+        # Log startup info
+        if args.dry_run:
+            logger.info(f"Starting DRY RUN import from {args.csv_file} to list {args.list_id}")
+        else:
+            logger.info(f"Starting import from {args.csv_file} to list {args.list_id}")
+        
+        # Process CSV
+        success_count, error_count = importer.process_csv(args.csv_file)
+        
+        # Log completion info
+        if args.dry_run:
+            logger.info(f"DRY RUN completed. Would have created {success_count} tasks, {error_count} would have failed.")
+        else:
+            logger.info(f"Import completed. Successfully created {success_count} tasks, {error_count} failed.")
+        
+        # Output file info
+        if args.output:
+            logger.info(f"Results written to {args.output}")
+            
+        return 0  # 正常終了
+            
+    except ConfigurationError as e:
+        logger.error(f"Configuration error: {e}")
+        return 1
+    except AuthenticationError as e:
+        logger.error(f"Authentication error: {e}")
+        return 1
+    except ResourceNotFoundError as e:
+        logger.error(f"Resource not found: {e}")
+        return 1
+    except APIError as e:
+        logger.error(f"API error: {e}")
+        return 1
+    except CSVError as e:
+        logger.error(f"CSV error: {e}")
+        return 1
+    except ClickUpImporterError as e:
+        logger.error(f"Error: {e}")
+        return 1
+    except Exception as e:
+        logger.exception(f"Unexpected error: {e}")
+        return 1
 
+# コマンドライン実行のエントリーポイント
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
