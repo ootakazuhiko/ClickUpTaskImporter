@@ -1,0 +1,5 @@
+name,description,due_date,priority,status,tags,assignees,subtasks,custom_XXXXXXXX
+タスク名1,これはタスク1の説明です,2025-05-01,high,to do,重要,12345,サブタスク1;サブタスク2,カスタムフィールド値
+タスク名2,タスク2の説明内容,2025-05-15,normal,in progress,緊急,67890,,
+タスク名3,説明はオプションです,,low,,,,
+タスク名4,,,,,,,,

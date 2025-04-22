@@ -8,7 +8,7 @@ This script reads task data from a CSV file and creates tasks in ClickUp via the
 You need to provide your ClickUp API token and list ID to use this script.
 
 Usage:
-    python clickup-csv-importer.py --csv-file tasks.csv --list-id YOUR_LIST_ID --api-token YOUR_API_TOKEN
+    python clickup_csv_importer.py --csv-file tasks.csv --list-id YOUR_LIST_ID --api-token YOUR_API_TOKEN
 """
 
 import argparse
