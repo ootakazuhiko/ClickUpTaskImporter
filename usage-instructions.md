@@ -1,5 +1,9 @@
 # ClickUp CSVタスクインポーター 使用方法
 
+[日本語](#japanese) | [English](./usage-instructions-en.md)
+
+<a id="japanese"></a>
+
 このプログラムは、CSVファイルからClickUpにタスクをAPIを使って作成するためのツールです。
 
 ## 準備
